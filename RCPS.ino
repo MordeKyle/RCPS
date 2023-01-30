@@ -31,10 +31,16 @@ char ssid[] = "SSID HERE";
 char pass[] = "PASS HERE";
 
 int pwrSwitchOut = D1;
-int pwrLEDin = D2;
+int rstSwitchOut = D2;
+int pwrLEDout = D3;
+int hddLEDout = D4;
+int hddLEDin = D7;
+int pwrLEDin = D8;
 int pwrState = 0;
+int hddState = 0;
+int passthrough = 0;
 
-//handle state change in virtual button V0
+//handle state change in virtual button V0(power)
 BLYNK_WRITE(V0)
 {
   int pinValue = param.asInt();
@@ -42,7 +48,7 @@ BLYNK_WRITE(V0)
   //if virtual button pressed
   if (pinValue == 1)
   {
-    Serial.println("Push");
+    Serial.println("Push(Power)");
     //read the state of the power led from the motherboard
     pwrState = digitalRead(pwrLEDin);
 
@@ -51,25 +57,110 @@ BLYNK_WRITE(V0)
     {
       //activate the power switch octocoupler
       digitalWrite(pwrSwitchOut, HIGH);
-      Serial.println("ON");   
-      delay(500);
+      Serial.println("ON(Power)");   
+      delay(250);
       //deactivate power switch octocoupler after 500ms delay
       digitalWrite(pwrSwitchOut, LOW);
-      Serial.println("Delayed Release");   
+      Serial.println("Delayed Release(Power)");   
     }
     //if the computer is already turned on, dont activate power switch octocoupler
     else
     {
       digitalWrite(pwrSwitchOut, LOW);
-      Serial.println("OFF");
+      Serial.println("Blocked(Power)");
     }
   }
   else
   {
-    Serial.println("Release");
     digitalWrite(pwrSwitchOut, LOW);
+    Serial.println("Release(Power)");
   }
 
+}
+
+//handle state change in virtual button V2(reset)
+BLYNK_WRITE(V2)
+{
+  int pinValue = param.asInt();
+
+  //if virtual button is pressed
+  if (pinValue == 1)
+  {
+    //activate the reset switch octocoupler
+    digitalWrite(rstSwitchOut, HIGH);
+    Serial.println("Push(Reset)");
+    delay(250);
+    digitalWrite(rstSwitchOut, LOW);
+    Serial.println("Delayed Release(Reset)");
+  }  
+  else
+  {
+    digitalWrite(rstSwitchOut, LOW);
+    Serial.println("Release(Reset)");
+  }
+}
+
+BLYNK_WRITE(V4)
+{
+  int pinValue = param.asInt();
+
+  if (pinValue == 1)
+  {
+    passthrough = 1;
+  }
+  else
+  {
+    passthrough = 0;
+  }
+}
+
+//updates the virtual led's
+void updateRemoteLEDs()
+{
+  if (pwrState == HIGH)
+  {
+    Blynk.virtualWrite(V1,1);
+  }
+  else
+  {
+    Blynk.virtualWrite(V1,0);
+  }
+  if (hddState == HIGH)
+  {
+    Blynk.virtualWrite(V3,1);
+  }
+  else
+  {
+    Blynk.virtualWrite(V3,0);
+  }
+}
+
+void updateLocalLEDs()
+{
+  if (passthrough == 1)
+  {
+    if (pwrState == HIGH)
+    {
+      digitalWrite(pwrLEDout, HIGH);
+    }
+    else
+    {
+      digitalWrite(pwrLEDout, LOW);
+    }
+    if (hddState == HIGH)
+    {
+      digitalWrite(hddLEDout, HIGH);
+    }
+    else
+    {
+      digitalWrite(hddLEDout, LOW);
+    }
+  }
+  else
+  {
+    digitalWrite(pwrLEDout, LOW);
+    digitalWrite(hddLEDout, LOW);
+  }
 }
 
 void setup()
@@ -77,6 +168,10 @@ void setup()
   // Debug console
   Serial.begin(115200);
   pinMode(pwrSwitchOut, OUTPUT);
+  pinMode(rstSwitchOut, OUTPUT);
+  pinMode(pwrLEDout, OUTPUT);
+  pinMode(hddLEDout, OUTPUT);
+  pinMode(hddLEDin, INPUT);
   pinMode(pwrLEDin, INPUT);
 
   //Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
@@ -95,15 +190,7 @@ void loop()
   //check to see if the power led is on and display its status
   //**need to turn this into function**
   pwrState = digitalRead(pwrLEDin);
-
-  if (pwrState == HIGH)
-  {
-    Blynk.virtualWrite(V1,1);
-    //Serial.println("ON");
-  }
-  else
-  {
-    Blynk.virtualWrite(V1,0);
-    //Serial.println("OFF");
-  }
+  hddState = digitalRead(hddLEDin);
+  updateLocalLEDs();
+  updateRemoteLEDs();
 }
